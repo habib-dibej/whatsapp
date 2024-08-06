@@ -1,4 +1,4 @@
-const { Client, LocalAuth } = require('whatsapp-web.js');
+const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 
 class SessionManager {
     constructor() {
@@ -37,6 +37,13 @@ class SessionManager {
                 this.sessions.delete(sessionId);
             });
 
+            client.on('message', async (msg) => {
+                if (msg.hasMedia) {
+                    const media = await msg.downloadMedia();
+                    console.log('Media received:', media);
+                }
+            });
+
             client.initialize();
 
             this.sessions.set(sessionId, {
@@ -57,6 +64,18 @@ class SessionManager {
             await session.client.logout();
             this.sessions.delete(sessionId);
         }
+    }
+
+
+    async sendMedia(sessionId, chatId, mediaPath) {
+        const session = this.sessions.get(sessionId);
+        if (!session) throw new Error('Session not found');
+        if (!session.ready) throw new Error('Client not ready');
+        console.log('Sending media to:', chatId);
+        console.log('Media path:', mediaPath);
+        
+        const media = MessageMedia.fromFilePath(mediaPath);
+        await session.client.sendMessage(chatId, media);
     }
 }
 

@@ -1,6 +1,6 @@
 const express = require('express');
 const sessionManager = require('./sessionManager');
-
+const multer = require('multer');
 const router = express.Router();
 
 router.get('/qr/:sessionId', async (req, res) => {
@@ -136,6 +136,41 @@ router.get('/contacts/:sessionId', async (req, res) => {
     } catch (error) {
         console.error('Error fetching contacts:', error.message);
         res.status(500).json({ error: 'Error fetching contacts', message: error.message });
+    }
+});
+
+
+
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, 'uploads/');
+    },
+    filename: (req, file, cb) => {
+        cb(null, `${Date.now()}-${file.originalname}`);
+    }
+});
+
+const upload = multer({ storage });
+
+
+router.post('/upload/:sessionId', upload.single('file'), async (req, res) => {
+    const { sessionId } = req.params;
+    const { recipientId } = req.body;
+    const file = req.file;
+
+    if (!file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    try {
+        
+        await sessionManager.createSession(sessionId);
+        await sessionManager.sendMedia(sessionId, recipientId, file.path);
+
+        res.json({ success: true, message: 'File sent successfully' });
+    } catch (error) {
+        console.error('Error sending file:', error.message);
+        res.status(500).json({ error: 'Error sending file', message: error.message });
     }
 });
 

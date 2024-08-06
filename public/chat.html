@@ -29,6 +29,8 @@
             <div class="chat-input">
                 <input type="text" id="messageInput" placeholder="Type a message" autocomplete="off">
                 <button class="send-button" id="sendButton">Send</button>
+                <input type="file" id="fileInput" style="display: none;">
+                <button class="upload-button" id="uploadButton">Upload</button>
             </div>
         </div>
     </div>
@@ -123,6 +125,8 @@
                 chatWindow.style.display = 'flex';
 
                 document.getElementById('sendButton').onclick = () => sendMessage(chatId);
+                document.getElementById('uploadButton').onclick = () => document.getElementById('fileInput').click();
+                document.getElementById('fileInput').onchange = () => uploadFile(chatId);
 
                 startPolling(); // Start polling for new messages
             } catch (error) {
@@ -133,6 +137,38 @@
 
         function scrollToBottom(element) {
             element.scrollTop = element.scrollHeight; // Scroll to the bottom of the message area
+        }
+
+        async function uploadFile(chatId) {
+            console.log('Uploading file...');
+            console.log('Chat ID:', chatId);
+            
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            if (!file) return;
+            console.log('File:', file);
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('recipientId', chatId);
+
+            try {
+                const response = await fetch(`/upload/${sessionId}`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    addMessageToChat({ body: 'Media file', mediaUrl: data.url, fromMe: true, timestamp: Date.now() }, chatId);
+                    scrollToBottom(document.getElementById('chatMessages')); // Scroll after uploading
+                } else {
+                    const errorData = await response.json();
+                    throw new Error(`Error uploading file: ${errorData.message || response.statusText}`);
+                }
+            } catch (error) {
+                console.error('Error uploading file:', error);
+                alert('Failed to upload file. Please try again later.');
+            }
         }
 
         async function sendMessage(chatId) {
@@ -164,20 +200,20 @@
         }
 
         function addMessageToChat(message, chatId) {
-    const chatMessages = document.getElementById('chatMessages');
-    const div = document.createElement('div');
-    div.classList.add('message', message.fromMe ? 'from-me' : 'from-them');
+            const chatMessages = document.getElementById('chatMessages');
+            const div = document.createElement('div');
+            div.classList.add('message', message.fromMe ? 'from-me' : 'from-them');
 
-    let messageContent = `<span>${message.body}</span>`;
+            let messageContent = `<span>${message.body}</span>`;
 
-    if (message.mediaUrl) {
-        messageContent += `<img src="${message.mediaUrl}" alt="Media" style="max-width: 200px; margin-top: 5px;">`;
-    }
+            if (message.mediaUrl) {
+                messageContent += `<img src="${message.mediaUrl}" alt="Media" style="max-width: 200px; margin-top: 5px;">`;
+            }
 
-    div.innerHTML = `${messageContent}<span class="message-time">${new Date(message.timestamp).toLocaleTimeString()}</span>`;
-    chatMessages.appendChild(div);
-    scrollToBottom(chatMessages);
-}
+            div.innerHTML = `${messageContent}<span class="message-time">${new Date(message.timestamp).toLocaleTimeString()}</span>`;
+            chatMessages.appendChild(div);
+            scrollToBottom(chatMessages);
+        }
 
         function startPolling() {
             setInterval(async () => {
