@@ -1,0 +1,26 @@
+<nav>
+    <ul>
+        <li><a href="index.html">Home</a></li>
+        <li><a href="chat.html">Chats</a></li>
+        <li><a href="contact.html">Contacts</a></li>
+        <li><a href="#" id="logout">Logout</a></li>
+    </ul>
+</nav>
+
+<script>
+    document.getElementById('logout').addEventListener('click', async (event) => {
+        event.preventDefault();
+        try {
+            console.log('Sending logout request');
+            const response = await fetch('/logout', { method: 'POST' });
+            if (response.ok) {
+                console.log('Logout successful, redirecting to qr.html');
+                window.location.href = '/qr.html';
+            } else {
+                console.error('Error logging out:', await response.text());
+            }
+        } catch (error) {
+            console.error('Error logging out:', error);
+        }
+    });
+</script>

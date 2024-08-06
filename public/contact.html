@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Web - Contacts</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        /* Styles for full-page contact list and information */
+        body,
+        html {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #e5ddd5;
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .navbar {
+            background-color: #075e54;
+            color: white;
+            padding: 10px;
+            text-align: center;
+        }
+
+        .navbar a {
+            color: white;
+            margin: 0 10px;
+            text-decoration: none;
+            font-weight: bold;
+        }
+
+        .main-container {
+            display: flex;
+            height: calc(100% - 40px);
+            /* Adjust based on navbar height */
+        }
+
+        .contact-container {
+            width: 40%;
+            /* Increased width to 40% */
+            background-color: #fff;
+            border-right: 1px solid #ddd;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #searchContact {
+            width: 100%;
+            padding: 15px;
+            border: none;
+            border-bottom: 1px solid #ddd;
+            outline: none;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+
+        .contact-list {
+            flex-grow: 1;
+            overflow-y: auto;
+        }
+
+        .contact-list-item {
+            padding: 15px;
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background-color 0.2s;
+        }
+
+        .contact-list-item:hover {
+            background-color: #f1f1f1;
+        }
+
+        .contact-info-container {
+            width: 60%;
+            /* Adjust width to balance with increased contact list size */
+            padding: 20px;
+            background-color: #fff;
+        }
+
+        .contact-info-container h2 {
+            margin-top: 0;
+        }
+
+        .send-message-button {
+            background-color: #25d366;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .send-message-button:hover {
+            background-color: #20c65a;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="navbar">
+        <a href="index.html">Home</a>
+        <a href="chat.html">Chats</a>
+        <a href="#" id="logoutButton">Logout</a>
+    </div>
+    <div class="main-container">
+        <div class="contact-container">
+            <input type="text" id="searchContact" placeholder="Search contacts..." />
+            <div class="contact-list" id="contactList">
+                <!-- Contact list items will be populated here -->
+            </div>
+        </div>
+        <div class="contact-info-container" id="contactInfo">
+            <h2>Select a contact</h2>
+            <!-- Contact information will be displayed here -->
+        </div>
+    </div>
+
+    <script>
+
+        let sessionId;
+
+        async function getSessionId() {
+            try {
+                const response = await fetch('/get-ip');
+                if (response.ok) {
+                    const data = await response.json();
+                    sessionId = data.ip;
+                    loadContacts();  // Load contacts on page load
+
+                    document.getElementById('searchContact').addEventListener('input', (event) => {
+                        filterContacts(event.target.value);
+                    });
+
+                } else {
+                    console.error('Error fetching IP address:', await response.text());
+                }
+            } catch (error) {
+                console.error('Error fetching IP address:', error);
+            }
+        }
+  
+        async function loadContacts() {
+            try {
+                const response = await fetch(`/contacts/${sessionId}`);
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(`Error fetching contacts: ${errorData.message || response.statusText}`);
+                }
+                const contacts = await response.json();
+
+                const contactList = document.getElementById('contactList');
+                contactList.innerHTML = '';  
+
+                contacts.forEach(contact => {
+                    const div = document.createElement('div');
+                    div.className = 'contact-list-item';
+                    div.textContent = contact.name || contact.id.user;
+                    div.dataset.id = contact.id;
+                    div.dataset.phone = contact.phone || 'N/A';
+                    contactList.appendChild(div);
+                });
+
+                contactList.addEventListener('click', async (event) => {
+                    if (event.target.classList.contains('contact-list-item')) {
+                        const contactId = event.target.dataset.id;
+                        const contactName = event.target.textContent;
+                        const contactPhone = event.target.dataset.phone;
+                        displayContactInfo(contactName, contactPhone, contactId);
+                    }
+                });
+            } catch (error) {
+                console.error('Error loading contacts:', error);
+                alert('Failed to load contacts. Please try again later.');
+            }
+        }
+
+        function displayContactInfo(name, phone, contactId) {
+            const contactInfo = document.getElementById('contactInfo');
+            contactInfo.innerHTML = `
+                <h2>${name}</h2>
+                <p>Phone: ${phone}</p>
+                <button class="send-message-button" onclick="goToChat('${contactId}')">Send Message</button>
+            `;
+        }
+
+        function goToChat(contactId) {
+            window.location.href = `chat.html?contact=${contactId}`;
+        }
+
+        function filterContacts(query) {
+            const contactList = document.getElementById('contactList');
+            const contactItems = contactList.querySelectorAll('.contact-list-item');
+
+            contactItems.forEach(item => {
+                const name = item.textContent || item.innerText;
+                if (name.toLowerCase().includes(query.toLowerCase())) {
+                    item.style.display = 'block';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        }
+
+        document.getElementById('logoutButton').addEventListener('click', async (event) => {
+            event.preventDefault();
+            try {
+                await fetch(`/logout/${sessionId}` , { method: 'POST' });
+                window.location.href = '/qr.html';  
+            } catch (error) {
+                console.error('Error logging out:', error);
+            }
+        });
+
+        getSessionId();
+    </script>
+</body>
+
+</html>

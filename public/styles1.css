@@ -1,0 +1,68 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f0f0f0;
+}
+
+.navbar {
+    background-color: #333;
+    color: white;
+    padding: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.navbar a {
+    color: white;
+    margin-right: 10px;
+    text-decoration: none;
+}
+
+.contact-container {
+    display: flex;
+    height: calc(100vh - 50px); /* Adjust height for navbar */
+}
+
+.contact-list {
+    width: 30%;
+    border-right: 1px solid #ddd;
+    overflow-y: auto;
+    background-color: #fff;
+}
+
+.contact-list-item {
+    padding: 15px;
+    border-bottom: 1px solid #ddd;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.contact-list-item:hover {
+    background-color: #f7f7f7;
+}
+
+.contact-info {
+    flex-grow: 1;
+    padding: 20px;
+    background-color: #fff;
+}
+
+.contact-info h2 {
+    margin-top: 0;
+}
+
+.send-message-button {
+    padding: 10px 20px;
+    background-color: #075e54;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 10px;
+}
+
+.send-message-button:hover {
+    background-color: #064c45;
+}

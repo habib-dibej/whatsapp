@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <div class="navbar">
+        <a href="chat.html">Chats</a>
+        <a href="contact.html">Contacts</a>
+        <a href="#" id="logoutButton">Logout</a>
+    </div>
+    <div class="container">
+        <h1>Welcome to WhatsApp Web</h1>
+        <p>Please navigate to the Chats or Contacts page to start interacting.</p>
+    </div>
+
+    <script>
+        let sessionId;
+
+        async function getSessionId() {
+            try {
+                const response = await fetch('/get-ip');
+                if (response.ok) {
+                    const data = await response.json();
+                    sessionId = data.ip;
+                } else {
+                    console.error('Error fetching IP address:', await response.text());
+                }
+            } catch (error) {
+                console.error('Error fetching IP address:', error);
+            }
+        }
+
+        document.getElementById('logoutButton').addEventListener('click', async (event) => {
+            event.preventDefault();
+            try {
+                const response = await fetch(`/logout/${sessionId}`, { method: 'POST' });
+                if (response.ok) {
+                    window.location.href = '/qr.html';  // Redirect to QR page
+                } else {
+                    console.error('Error logging out:', await response.text());
+                }
+            } catch (error) {
+                console.error('Error logging out:', error);
+            }
+        });
+        getSessionId();
+    </script>
+</body>
+
+</html>

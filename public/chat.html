@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Web - Chats</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <div class="navbar">
+        <a href="index.html">Home</a>
+        <a href="chat.html">Chats</a>
+        <a href="contact.html">Contacts</a>
+        <a href="#" id="logoutButton">Logout</a>
+    </div>
+    <div class="chat-container">
+        <ul class="chat-list" id="chatList">
+            <!-- Chat list items will be populated here -->
+        </ul>
+        <div class="chat-window" id="chatWindow" style="display: none;">
+            <div class="chat-header" id="chatHeader">
+                <!-- Chat name will be displayed here -->
+            </div>
+            <div class="chat-messages" id="chatMessages">
+                <!-- Chat messages will be displayed here -->
+            </div>
+            <div class="chat-input">
+                <input type="text" id="messageInput" placeholder="Type a message" autocomplete="off">
+                <button class="send-button" id="sendButton">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let sessionId;
+        let lastMessageTimestamp = 0; // Store the timestamp of the last received message
+        let currentChatId = null; // Track the current chat ID being viewed
+
+        async function getSessionId() {
+            try {
+                const response = await fetch('/get-ip');
+                if (response.ok) {
+                    const data = await response.json();
+                    sessionId = data.ip;
+                    checkReadyState();
+                } else {
+                    console.error('Error fetching IP address:', await response.text());
+                }
+            } catch (error) {
+                console.error('Error fetching IP address:', error);
+            }
+        }
+
+        async function checkReadyState() {
+            try {
+                const response = await fetch(`/ready/${sessionId}`);
+                const data = await response.json();
+                if (data.ready) {
+                    loadChats();
+                } else {
+                    console.log('Not ready');
+                }
+            } catch (error) {
+                console.error('Error checking ready state:', error);
+                window.location.href = '/qr.html';
+            }
+        }
+
+        async function loadChats() {
+            try {
+                const response = await fetch(`/chats/${sessionId}`);
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(`Error fetching chats: ${errorData.message || response.statusText}`);
+                }
+                const chats = await response.json();
+
+                const chatList = document.getElementById('chatList');
+                chatList.innerHTML = '';
+
+                chats.forEach(chat => {
+                    const li = document.createElement('li');
+                    li.textContent = chat.name || chat.id;
+                    li.dataset.id = chat.id;
+                    li.addEventListener('click', () => loadMessages(chat.id));
+                    chatList.appendChild(li);
+                });
+            } catch (error) {
+                console.error('Error loading chats:', error);
+                alert('Failed to load chats. Please try again later.');
+            }
+        }
+
+        async function loadMessages(chatId) {
+            currentChatId = chatId; // Set the current chat ID
+            try {
+                const response = await fetch(`/chat/${sessionId}?id=${chatId}`);
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(`Error fetching messages: ${errorData.message || response.statusText}`);
+                }
+                const chatData = await response.json();
+
+                const chatHeader = document.getElementById('chatHeader');
+                chatHeader.textContent = chatData.name || 'Chat';
+
+                const chatMessages = document.getElementById('chatMessages');
+                chatMessages.innerHTML = ''; // Clear the message area
+                chatMessages.style.display = 'flex';
+
+                chatData.messages.reverse().forEach(message => { // Add messages from top to bottom
+                    addMessageToChat(message, chatId);
+                    if (message.timestamp > lastMessageTimestamp) {
+                        lastMessageTimestamp = message.timestamp; // Update the last message timestamp
+                    }
+                });
+
+                scrollToBottom(chatMessages);
+
+                const chatWindow = document.getElementById('chatWindow');
+                chatWindow.style.display = 'flex';
+
+                document.getElementById('sendButton').onclick = () => sendMessage(chatId);
+
+                startPolling(); // Start polling for new messages
+            } catch (error) {
+                console.error('Error loading messages:', error);
+                alert('Failed to load messages. Please try again later.');
+            }
+        }
+
+        function scrollToBottom(element) {
+            element.scrollTop = element.scrollHeight; // Scroll to the bottom of the message area
+        }
+
+        async function sendMessage(chatId) {
+            const messageInput = document.getElementById('messageInput');
+            const message = messageInput.value.trim();
+            if (!message) return;
+
+            try {
+                const response = await fetch(`/send/${sessionId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ id: chatId, message })
+                });
+
+                if (response.ok) {
+                    messageInput.value = ''; // Clear the input field
+                    addMessageToChat({ body: message, fromMe: true, timestamp: Date.now() }, chatId);
+                    scrollToBottom(document.getElementById('chatMessages')); // Scroll after sending
+                } else {
+                    const errorData = await response.json();
+                    throw new Error(`Error sending message: ${errorData.message || response.statusText}`);
+                }
+            } catch (error) {
+                console.error('Error sending message:', error);
+                alert('Failed to send message. Please try again later.');
+            }
+        }
+
+        function addMessageToChat(message, chatId) {
+    const chatMessages = document.getElementById('chatMessages');
+    const div = document.createElement('div');
+    div.classList.add('message', message.fromMe ? 'from-me' : 'from-them');
+
+    let messageContent = `<span>${message.body}</span>`;
+
+    if (message.mediaUrl) {
+        messageContent += `<img src="${message.mediaUrl}" alt="Media" style="max-width: 200px; margin-top: 5px;">`;
+    }
+
+    div.innerHTML = `${messageContent}<span class="message-time">${new Date(message.timestamp).toLocaleTimeString()}</span>`;
+    chatMessages.appendChild(div);
+    scrollToBottom(chatMessages);
+}
+
+        function startPolling() {
+            setInterval(async () => {
+                if (!currentChatId) return; // Ensure there is a chat ID to poll
+                try {
+                    const response = await fetch(`/new-messages/${sessionId}?id=${currentChatId}&lastTimestamp=${lastMessageTimestamp}`);
+                    if (!response.ok) {
+                        throw new Error('Error fetching new messages');
+                    }
+
+                    const data = await response.json();
+                    if (data.messages.length > 0) {
+                        refreshChat(currentChatId); // Refresh chat if new messages are found
+                    }
+                } catch (error) {
+                    console.error('Error polling for new messages:', error);
+                }
+            }, 3000); // Poll every 3 seconds
+        }
+
+        async function refreshChat(chatId) {
+            try {
+                const response = await fetch(`/chat/${sessionId}?id=${chatId}`);
+                if (!response.ok) {
+                    throw new Error('Error refreshing chat');
+                }
+
+                const chatData = await response.json();
+                const chatMessages = document.getElementById('chatMessages');
+                chatMessages.innerHTML = ''; // Clear the message area
+
+                chatData.messages.reverse().forEach(message => {
+                    addMessageToChat(message, chatId);
+                });
+
+                scrollToBottom(chatMessages); // Ensure the chat is scrolled to the bottom
+            } catch (error) {
+                console.error('Error refreshing chat:', error);
+            }
+        }
+
+        document.getElementById('logoutButton').addEventListener('click', async (event) => {
+            event.preventDefault();
+            try {
+                await fetch(`/logout/${sessionId}`, { method: 'POST' });
+                window.location.href = '/qr.html';
+            } catch (error) {
+                console.error('Error logging out:', error);
+            }
+        });
+
+        getSessionId();
+    </script>
+
+</body>
+
+</html>
