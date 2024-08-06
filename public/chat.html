@@ -203,13 +203,14 @@
             const chatMessages = document.getElementById('chatMessages');
             const div = document.createElement('div');
             div.classList.add('message', message.fromMe ? 'from-me' : 'from-them');
-
-            let messageContent = `<span>${message.body}</span>`;
-
+            console.log(message.media ? message.media.filename : message.body);
+       
+                let messageContent = `<span>${message.body || 'Media file'}</span>`;
+         
             if (message.mediaUrl) {
                 messageContent += `<img src="${message.mediaUrl}" alt="Media" style="max-width: 200px; margin-top: 5px;">`;
             }
-
+           
             div.innerHTML = `${messageContent}<span class="message-time">${new Date(message.timestamp).toLocaleTimeString()}</span>`;
             chatMessages.appendChild(div);
             scrollToBottom(chatMessages);

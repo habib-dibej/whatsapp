@@ -1,4 +1,5 @@
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
+const fs = require('fs');
 
 class SessionManager {
     constructor() {
@@ -71,12 +72,11 @@ class SessionManager {
         const session = this.sessions.get(sessionId);
         if (!session) throw new Error('Session not found');
         if (!session.ready) throw new Error('Client not ready');
-        console.log('Sending media to:', chatId);
-        console.log('Media path:', mediaPath);
         
         const media = MessageMedia.fromFilePath(mediaPath);
         await session.client.sendMessage(chatId, media);
     }
+
 }
 
 module.exports = new SessionManager();

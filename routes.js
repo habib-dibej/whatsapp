@@ -49,11 +49,24 @@ router.get('/chat/:sessionId', async (req, res) => {
         console.log('Fetching chat messages for:', chatId);
         const chat = await session.client.getChatById(chatId);
         const messages = await chat.fetchMessages({ limit: 10000 });
+
         const formattedMessages = messages.map(message => ({
             body: message.body,
             from: message.from,
             fromMe: message.fromMe,
-            timestamp: message.timestamp * 1000  // Convert seconds to milliseconds
+            timestamp: message.timestamp * 1000,
+            type: message.type,
+            media : message.hasMedia ? {
+                type: message._data.type,
+                mimetype: message._data.mimetype,
+                url: message._data.deprecatedMms3Url,
+                mediaKey: message._data.mediaKey,
+                directPath: message._data.directPath,
+                filename: message._data.filename,
+                filehash: message._data.filehash,
+                encFilehash: message._data.encFilehash,
+                mediaKey : message._data.mediaKey,
+            } : null
         }));
         res.json({ name: chat.name || chat.id.user, messages: formattedMessages });
     } catch (error) {
@@ -163,7 +176,7 @@ router.post('/upload/:sessionId', upload.single('file'), async (req, res) => {
     }
 
     try {
-        
+
         await sessionManager.createSession(sessionId);
         await sessionManager.sendMedia(sessionId, recipientId, file.path);
 
