@@ -142,7 +142,7 @@
         async function uploadFile(chatId) {
             console.log('Uploading file...');
             console.log('Chat ID:', chatId);
-            
+
             const fileInput = document.getElementById('fileInput');
             const file = fileInput.files[0];
             if (!file) return;
@@ -203,14 +203,21 @@
             const chatMessages = document.getElementById('chatMessages');
             const div = document.createElement('div');
             div.classList.add('message', message.fromMe ? 'from-me' : 'from-them');
-            console.log(message.media ? message.media.filename : message.body);
-       
-                let messageContent = `<span>${message.body || 'Media file'}</span>`;
-         
-            if (message.mediaUrl) {
-                messageContent += `<img src="${message.mediaUrl}" alt="Media" style="max-width: 200px; margin-top: 5px;">`;
+
+            let messageContent = `<span>${message.body || ''}</span>`;
+            console.log(message);
+
+            if (message.media && message.media.url) {
+                const mediaUrl = message.media.url.replace('/home/ivan/whatsapp/received', '/media'); 
+                const isImage = message.media.mimetype.startsWith('image/');
+                if (isImage) {
+                    
+                    messageContent += `<img src="${mediaUrl}" alt="Media" style="max-width: 200px; margin-top: 5px;">`;
+                } else {
+                    messageContent += `<a href="${mediaUrl}" download style="margin-top: 5px;">Download File</a>`;
+                }
             }
-           
+
             div.innerHTML = `${messageContent}<span class="message-time">${new Date(message.timestamp).toLocaleTimeString()}</span>`;
             chatMessages.appendChild(div);
             scrollToBottom(chatMessages);
@@ -218,7 +225,7 @@
 
         function startPolling() {
             setInterval(async () => {
-                if (!currentChatId) return; // Ensure there is a chat ID to poll
+                if (!currentChatId) return; 
                 try {
                     const response = await fetch(`/new-messages/${sessionId}?id=${currentChatId}&lastTimestamp=${lastMessageTimestamp}`);
                     if (!response.ok) {
@@ -227,12 +234,12 @@
 
                     const data = await response.json();
                     if (data.messages.length > 0) {
-                        refreshChat(currentChatId); // Refresh chat if new messages are found
+                        refreshChat(currentChatId); 
                     }
                 } catch (error) {
                     console.error('Error polling for new messages:', error);
                 }
-            }, 3000); // Poll every 3 seconds
+            }, 3000);
         }
 
         async function refreshChat(chatId) {
@@ -244,13 +251,13 @@
 
                 const chatData = await response.json();
                 const chatMessages = document.getElementById('chatMessages');
-                chatMessages.innerHTML = ''; // Clear the message area
+                chatMessages.innerHTML = ''; 
 
                 chatData.messages.reverse().forEach(message => {
                     addMessageToChat(message, chatId);
                 });
 
-                scrollToBottom(chatMessages); // Ensure the chat is scrolled to the bottom
+                scrollToBottom(chatMessages); 
             } catch (error) {
                 console.error('Error refreshing chat:', error);
             }

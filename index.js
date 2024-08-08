@@ -10,6 +10,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/', routes);
 app.use('/uploads', express.static('uploads'));
+app.use('/media', express.static(path.join(__dirname, 'received')));
 
 app.get('/get-ip', (req, res) => {
     fetch('https://api.ipify.org?format=json')

@@ -1,30 +1,44 @@
+// routes.js
 const express = require('express');
 const sessionManager = require('./sessionManager');
 const multer = require('multer');
+const fs = require('fs');
+const path = require('path');
+
 const router = express.Router();
+const downloadedMediaCache = new Set();
 
 router.get('/qr/:sessionId', async (req, res) => {
     const { sessionId } = req.params;
-    const session = await sessionManager.createSession(sessionId);
-    if (!session.ready && session.qrCodeDataUrl) {
-        res.send(session.qrCodeDataUrl);
-    } else {
-        res.status(404).send('QR Code not available');
+    try {
+        const session = await sessionManager.createSession(sessionId);
+        if (!session.ready && session.qrCodeDataUrl) {
+            res.send(session.qrCodeDataUrl);
+        } else {
+            res.status(404).send('QR Code not available');
+        }
+    } catch (error) {
+        console.error('Error creating session:', error.message);
+        res.status(500).json({ error: 'Error creating session', message: error.message });
     }
 });
 
 router.get('/ready/:sessionId', async (req, res) => {
     const { sessionId } = req.params;
-    const session = await sessionManager.createSession(sessionId);
-    res.json({ ready: session.ready });
+    try {
+        const session = await sessionManager.createSession(sessionId);
+        res.json({ ready: session.ready });
+    } catch (error) {
+        console.error('Error checking session readiness:', error.message);
+        res.status(500).json({ error: 'Error checking session readiness', message: error.message });
+    }
 });
 
 router.get('/chats/:sessionId', async (req, res) => {
     const { sessionId } = req.params;
-    const session = await sessionManager.createSession(sessionId);
     try {
+        const session = await sessionManager.createSession(sessionId);
         if (!session.ready) {
-            console.log('Client not ready');
             return res.status(503).json({ error: 'Client not ready' });
         }
 
@@ -41,14 +55,50 @@ router.get('/chats/:sessionId', async (req, res) => {
     }
 });
 
+router.get('/media/:sessionId/:mediaId', (req, res) => {
+    const { sessionId, mediaId } = req.params;
+    const mediaPath = path.join(__dirname, 'received', sessionId, mediaId);
+
+    if (fs.existsSync(mediaPath)) {
+        res.sendFile(mediaPath);
+    } else {
+        res.status(404).send('Media not found');
+    }
+});
+
+
+const processMessages = async (messages, sessionId) => {
+    let MediaMessages = [];
+    await Promise.all(messages.map(async message => {
+        if (message.hasMedia) {
+            const media = await message.downloadMedia();
+            const mediaDir = path.join(__dirname, 'received', sessionId, message.id.id);
+
+            fs.mkdirSync(mediaDir, { recursive: true });
+
+            const currentTimestamp = Date.now();
+            const filename = media.filename || `${currentTimestamp}.${media.mimetype.split('/')[1]}`;
+            const mediaPath = path.join(mediaDir, filename);
+
+            fs.writeFileSync(mediaPath, media.data, { encoding: 'base64' });
+            MediaMessages.push({ id: message.id.id, path: mediaPath,mimetype: media.mimetype });
+        }
+    }));
+
+    return MediaMessages;
+}
+
 router.get('/chat/:sessionId', async (req, res) => {
     const { sessionId } = req.params;
     const chatId = req.query.id;
-    const session = await sessionManager.createSession(sessionId);
     try {
+        const session = await sessionManager.createSession(sessionId);
         console.log('Fetching chat messages for:', chatId);
         const chat = await session.client.getChatById(chatId);
         const messages = await chat.fetchMessages({ limit: 10000 });
+
+        let MediaMessages = await processMessages(messages, sessionId);
+
 
         const formattedMessages = messages.map(message => ({
             body: message.body,
@@ -56,17 +106,11 @@ router.get('/chat/:sessionId', async (req, res) => {
             fromMe: message.fromMe,
             timestamp: message.timestamp * 1000,
             type: message.type,
-            media : message.hasMedia ? {
-                type: message._data.type,
-                mimetype: message._data.mimetype,
-                url: message._data.deprecatedMms3Url,
-                mediaKey: message._data.mediaKey,
-                directPath: message._data.directPath,
-                filename: message._data.filename,
-                filehash: message._data.filehash,
-                encFilehash: message._data.encFilehash,
-                mediaKey : message._data.mediaKey,
+            media: message.hasMedia ? {
+                url: MediaMessages.find(media => media.id === message.id.id).path || null,
+                mimetype: MediaMessages.find(media => media.id === message.id.id).mimetype || null
             } : null
+
         }));
         res.json({ name: chat.name || chat.id.user, messages: formattedMessages });
     } catch (error) {
@@ -78,21 +122,20 @@ router.get('/chat/:sessionId', async (req, res) => {
 router.get('/new-messages/:sessionId', async (req, res) => {
     const { sessionId } = req.params;
     const chatId = req.query.id;
-    const lastTimestamp = req.query.lastTimestamp; // Timestamp of the last received message
-    const session = await sessionManager.createSession(sessionId);
-
+    const lastTimestamp = req.query.lastTimestamp;
     try {
+        const session = await sessionManager.createSession(sessionId);
         const chat = await session.client.getChatById(chatId);
         const messages = await chat.fetchMessages({ limit: 20 });
 
-        // Filter messages received after the last known timestamp
         const newMessages = messages.filter(message => message.timestamp * 1000 > lastTimestamp);
 
         const formattedMessages = newMessages.map(message => ({
             body: message.body,
             from: message.from,
             fromMe: message.fromMe,
-            timestamp: message.timestamp * 1000
+            timestamp: message.timestamp * 1000,
+            mediaUrl: message.hasMedia ? `/media/${sessionId}/${message.id.id}` : null
         }));
 
         res.json({ messages: formattedMessages });
@@ -105,8 +148,8 @@ router.get('/new-messages/:sessionId', async (req, res) => {
 router.post('/send/:sessionId', async (req, res) => {
     const { sessionId } = req.params;
     const { id, message } = req.body;
-    const session = await sessionManager.createSession(sessionId);
     try {
+        const session = await sessionManager.createSession(sessionId);
         console.log('Sending message to chat:', id);
         const chat = await session.client.getChatById(id);
         await chat.sendMessage(message);
@@ -131,10 +174,9 @@ router.post('/logout/:sessionId', async (req, res) => {
 
 router.get('/contacts/:sessionId', async (req, res) => {
     const { sessionId } = req.params;
-    const session = await sessionManager.createSession(sessionId);
     try {
+        const session = await sessionManager.createSession(sessionId);
         if (!session.ready) {
-            console.log('Client not ready');
             return res.status(503).json({ error: 'Client not ready' });
         }
 
@@ -143,7 +185,7 @@ router.get('/contacts/:sessionId', async (req, res) => {
         const formattedContacts = contacts.map(contact => ({
             id: contact.id._serialized,
             name: contact.name || contact.id.user,
-            phone: contact.number || 'N/A' // Access the correct property for phone
+            phone: contact.number || 'N/A'
         }));
         res.json(formattedContacts);
     } catch (error) {
@@ -151,8 +193,6 @@ router.get('/contacts/:sessionId', async (req, res) => {
         res.status(500).json({ error: 'Error fetching contacts', message: error.message });
     }
 });
-
-
 
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
@@ -165,7 +205,6 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
-
 router.post('/upload/:sessionId', upload.single('file'), async (req, res) => {
     const { sessionId } = req.params;
     const { recipientId } = req.body;
@@ -176,11 +215,10 @@ router.post('/upload/:sessionId', upload.single('file'), async (req, res) => {
     }
 
     try {
-
-        await sessionManager.createSession(sessionId);
+        const session = await sessionManager.createSession(sessionId);
         await sessionManager.sendMedia(sessionId, recipientId, file.path);
 
-        res.json({ success: true, message: 'File sent successfully' });
+        res.json({ success: true, message: 'File sent successfully', url: `/uploads/${file.filename}` });
     } catch (error) {
         console.error('Error sending file:', error.message);
         res.status(500).json({ error: 'Error sending file', message: error.message });

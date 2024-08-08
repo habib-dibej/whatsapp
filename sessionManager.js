@@ -1,5 +1,10 @@
+// sessionManager.js
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const fs = require('fs');
+const path = require('path');
+
+
+const downloadedMediaCache = new Set();
 
 class SessionManager {
     constructor() {
@@ -13,13 +18,13 @@ class SessionManager {
             });
 
             client.on('qr', (qr) => {
-                console.log('QR RECEIVED', qr);
+                console.log(`QR RECEIVED for session ${sessionId}`);
                 const session = this.sessions.get(sessionId);
                 session.qrCodeDataUrl = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(qr)}`;
             });
 
             client.on('ready', () => {
-                console.log('Client is ready!');
+                console.log(`Client for session ${sessionId} is ready!`);
                 const session = this.sessions.get(sessionId);
                 session.ready = true;
             });
@@ -41,7 +46,10 @@ class SessionManager {
             client.on('message', async (msg) => {
                 if (msg.hasMedia) {
                     const media = await msg.downloadMedia();
-                    console.log('Media received:', media);
+                    console.log(`Media received for session ${sessionId}:`, media.filename || media.mimetype);
+                    const mediaPath = `received/${media.filename || 'media'}.${media.mimetype.split('/')[1]}`;
+                    fs.writeFileSync(mediaPath, media.data, { encoding: 'base64' });
+                    console.log(`Media saved at ${mediaPath}`);
                 }
             });
 
@@ -52,8 +60,6 @@ class SessionManager {
                 qrCodeDataUrl: null,
                 ready: false
             });
-        } else {
-            return this.sessions.get(sessionId);
         }
 
         return this.sessions.get(sessionId);
@@ -67,16 +73,16 @@ class SessionManager {
         }
     }
 
-
     async sendMedia(sessionId, chatId, mediaPath) {
         const session = this.sessions.get(sessionId);
         if (!session) throw new Error('Session not found');
         if (!session.ready) throw new Error('Client not ready');
-        
+
         const media = MessageMedia.fromFilePath(mediaPath);
         await session.client.sendMessage(chatId, media);
-    }
 
+        fs.unlinkSync(mediaPath);
+    }
 }
 
 module.exports = new SessionManager();
