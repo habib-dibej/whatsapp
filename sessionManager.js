@@ -1,10 +1,9 @@
-// sessionManager.js
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const fs = require('fs');
 const path = require('path');
+const { exec } = require('child_process');
 
 
-const downloadedMediaCache = new Set();
 
 class SessionManager {
     constructor() {
@@ -72,16 +71,44 @@ class SessionManager {
             this.sessions.delete(sessionId);
         }
     }
+    async convertAudio(inputPath) {
+        const outputPath = inputPath.replace('.webm', '.mp3');
+        return new Promise((resolve, reject) => {
+            exec(`ffmpeg -i ${inputPath} -acodec libmp3lame ${outputPath}`, (error, stdout, stderr) => {
+                if (error) {
+                    console.error('Error converting audio:', stderr);
+                    reject(error);
+                } else {
+                    console.log('Audio converted to MP3:', outputPath);
+                    resolve(outputPath);
+                }
+            });
+        });
+    }
 
     async sendMedia(sessionId, chatId, mediaPath) {
         const session = this.sessions.get(sessionId);
         if (!session) throw new Error('Session not found');
         if (!session.ready) throw new Error('Client not ready');
 
-        const media = MessageMedia.fromFilePath(mediaPath);
-        await session.client.sendMessage(chatId, media);
+        try {
+            if (!fs.existsSync(mediaPath)) {
+                throw new Error(`File does not exist at path: ${mediaPath}`);
+            }
 
-        fs.unlinkSync(mediaPath);
+            let convertedMediaPath = mediaPath;
+            if (mediaPath.endsWith('.webm')) {
+                convertedMediaPath = await this.convertAudio(mediaPath);
+            }
+
+            const media = MessageMedia.fromFilePath(convertedMediaPath);
+
+            await session.client.sendMessage(chatId, media);
+            console.log(`Media sent to chat: ${chatId}`);
+        } catch (error) {
+            console.error('Error sending media:', error);
+            throw error; 
+        }
     }
 }
 

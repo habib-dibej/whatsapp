@@ -31,7 +31,10 @@
                 <button class="send-button" id="sendButton">Send</button>
                 <input type="file" id="fileInput" style="display: none;">
                 <button class="upload-button" id="uploadButton">Upload</button>
+                <button class="record-button" id="recordButton">Record</button>
+                <button class="send-audio-button" id="sendAudioButton" style="display: none;">Send Audio</button>
             </div>
+            <audio id="audioPreview" controls style="display: none;"></audio>
         </div>
     </div>
 
@@ -39,6 +42,80 @@
         let sessionId;
         let lastMessageTimestamp = 0; // Store the timestamp of the last received message
         let currentChatId = null; // Track the current chat ID being viewed
+
+
+        let mediaRecorder;
+        let audioChunks = [];
+        const audioPreview = document.getElementById('audioPreview');
+        const sendAudioButton = document.getElementById('sendAudioButton');
+        const recordButton = document.getElementById('recordButton');
+
+        recordButton.addEventListener('click', () => {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+                recordButton.textContent = 'Record';
+            } else {
+                startRecording();
+                recordButton.textContent = 'Stop Recording';
+            }
+        });
+
+        async function startRecording() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+
+                mediaRecorder.ondataavailable = (event) => {
+                    audioChunks.push(event.data);
+                };
+
+                mediaRecorder.onstop = () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/mp3' });
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    audioPreview.src = audioUrl;
+                    audioPreview.style.display = 'block';
+                    sendAudioButton.style.display = 'block';
+                };
+
+                audioChunks = [];
+                mediaRecorder.start();
+            } catch (error) {
+                console.error('Error accessing audio devices:', error);
+                alert('Failed to access audio devices. Please try again.');
+            }
+        }
+
+        sendAudioButton.addEventListener('click', () => {
+            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+            uploadAudio(audioBlob, currentChatId);
+            audioPreview.style.display = 'none';
+            sendAudioButton.style.display = 'none';
+        });
+
+        async function uploadAudio(audioBlob, chatId) {
+            const formData = new FormData();
+            formData.append('file', audioBlob, 'audio.webm');
+            formData.append('recipientId', chatId);
+
+            try {
+                const response = await fetch(`/upload/${sessionId}`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    addMessageToChat({ body: 'Audio message', mediaUrl: data.url, fromMe: true, timestamp: Date.now() }, chatId);
+                    scrollToBottom(document.getElementById('chatMessages'));
+                } else {
+                    const errorData = await response.json();
+                    throw new Error(`Error uploading audio: ${errorData.message || response.statusText}`);
+                }
+            } catch (error) {
+                console.error('Error uploading audio:', error);
+                alert('Failed to upload audio. Please try again later.');
+            }
+        }
 
         async function getSessionId() {
             try {
@@ -206,13 +283,15 @@
 
             let messageContent = `<span>${message.body || ''}</span>`;
             console.log(message);
-
             if (message.media && message.media.url) {
-                const mediaUrl = message.media.url.replace('/home/ivan/whatsapp/received', '/media'); 
+                const mediaUrl = message.media.url.replace('/home/ivan/whatsapp/received', '/media');
                 const isImage = message.media.mimetype.startsWith('image/');
+                const isAudio = message.media.mimetype.startsWith('audio/');
+
                 if (isImage) {
-                    
                     messageContent += `<img src="${mediaUrl}" alt="Media" style="max-width: 200px; margin-top: 5px;">`;
+                } else if (isAudio) {
+                    messageContent += `<audio controls style="margin-top: 5px;"><source src="${mediaUrl}" type="${message.media.mimetype}">Your browser does not support the audio element.</audio>`;
                 } else {
                     messageContent += `<a href="${mediaUrl}" download style="margin-top: 5px;">Download File</a>`;
                 }
@@ -225,7 +304,7 @@
 
         function startPolling() {
             setInterval(async () => {
-                if (!currentChatId) return; 
+                if (!currentChatId) return;
                 try {
                     const response = await fetch(`/new-messages/${sessionId}?id=${currentChatId}&lastTimestamp=${lastMessageTimestamp}`);
                     if (!response.ok) {
@@ -234,7 +313,7 @@
 
                     const data = await response.json();
                     if (data.messages.length > 0) {
-                        refreshChat(currentChatId); 
+                        refreshChat(currentChatId);
                     }
                 } catch (error) {
                     console.error('Error polling for new messages:', error);
@@ -251,13 +330,13 @@
 
                 const chatData = await response.json();
                 const chatMessages = document.getElementById('chatMessages');
-                chatMessages.innerHTML = ''; 
+                chatMessages.innerHTML = '';
 
                 chatData.messages.reverse().forEach(message => {
                     addMessageToChat(message, chatId);
                 });
 
-                scrollToBottom(chatMessages); 
+                scrollToBottom(chatMessages);
             } catch (error) {
                 console.error('Error refreshing chat:', error);
             }

@@ -96,7 +96,6 @@ router.get('/chat/:sessionId', async (req, res) => {
         console.log('Fetching chat messages for:', chatId);
         const chat = await session.client.getChatById(chatId);
         const messages = await chat.fetchMessages({ limit: 10000 });
-
         let MediaMessages = await processMessages(messages, sessionId);
 
 
@@ -215,7 +214,8 @@ router.post('/upload/:sessionId', upload.single('file'), async (req, res) => {
     }
 
     try {
-        const session = await sessionManager.createSession(sessionId);
+        
+        await sessionManager.createSession(sessionId);
         await sessionManager.sendMedia(sessionId, recipientId, file.path);
 
         res.json({ success: true, message: 'File sent successfully', url: `/uploads/${file.filename}` });
