@@ -284,9 +284,9 @@
             let messageContent = `<span>${message.body || ''}</span>`;
 
             if (message.media && message.media.url) {
-                const mediaUrl = message.media.url.replace(/.*\/received/, '/media');
-                
-                const isImage = message.media.mimetype.startsWith('image/');
+              
+                const mediaUrl = message.media.url.replace(/.*[\/\\]received/, '/media');
+                console.log('Media URL:', mediaUrl);                const isImage = message.media.mimetype.startsWith('image/');
                 const isAudio = message.media.mimetype.startsWith('audio/');
 
                 if (isImage) {
