@@ -282,9 +282,10 @@
             div.classList.add('message', message.fromMe ? 'from-me' : 'from-them');
 
             let messageContent = `<span>${message.body || ''}</span>`;
-            console.log(message);
+
             if (message.media && message.media.url) {
-                const mediaUrl = message.media.url.replace('/home/ivan/whatsapp/received', '/media');
+                const mediaUrl = message.media.url.replace(/.*\/received/, '/media');
+                
                 const isImage = message.media.mimetype.startsWith('image/');
                 const isAudio = message.media.mimetype.startsWith('audio/');
 
